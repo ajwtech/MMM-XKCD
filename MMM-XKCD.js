@@ -22,14 +22,17 @@ Module.register("MMM-XKCD", {
     forceSize: false,       // if true, set width/height exactly (may crop with objectFit)
     objectFit: "contain",   // "contain" | "cover" | "fill" | "none" | "scale-down"
 
-    // alt/title handling
+    // title + alt handling
     showTitle: true,
     dailyTitleMaxLen: 15,   // trim title in header
     showAlt: true,          // render the xkcd "alt" text visibly
     altPlacement: "below",  // "below" | "above" | "left" | "right" | "tooltip"
     altTooltip: true,       // also put alt in image title= for hover
     altMaxLength: 0,        // 0 = no truncation
-    gap: 8,                 // px gap between image and alt (for left/right/above/below)
+    gap: 8,                 // px gap between image and alt
+
+    // NEW: configurable caption column width (CSS units OK: "25vw", "320px", "30%")
+    altColumnWidth: "25vw",
 
     // selection
     randomComic: false,
@@ -118,6 +121,7 @@ Module.register("MMM-XKCD", {
     container.style.display = "flex";
     container.style.alignItems = "flex-start";
     container.style.gap = (this.config.gap || 0) + "px";
+    container.style.width = "100%";
 
     const place = this.config.altPlacement;
     if (place === "left" || place === "right") {
@@ -151,7 +155,6 @@ Module.register("MMM-XKCD", {
         comic.style.width = this.config.limitComicWidth + "px";
       if (this.config.limitComicHeight > 0)
         comic.style.height = this.config.limitComicHeight + "px";
-      // if only one provided, keep aspect for the other
       if (this.config.limitComicWidth > 0 && this.config.limitComicHeight === 0)
         comic.style.height = "auto";
       if (this.config.limitComicHeight > 0 && this.config.limitComicWidth === 0)
@@ -165,6 +168,8 @@ Module.register("MMM-XKCD", {
       comic.style.height = "auto";
     }
     comic.style.objectFit = this.config.objectFit || "contain";
+    // Let image take remaining space in left/right layout
+    comic.style.flex = (place === "left" || place === "right") ? "1 1 0%" : "0 1 auto";
 
     // Visible alt caption (unless tooltip-only)
     let altDiv = null;
@@ -176,15 +181,30 @@ Module.register("MMM-XKCD", {
         this.config.altMaxLength
       );
       altDiv.style.lineHeight = "1.3";
+
+      // Apply configurable caption width
+      const colWidth = this.config.altColumnWidth || "25vw";
+      if (place === "left" || place === "right") {
+        // fixed column for side caption
+        altDiv.style.flex = `0 0 ${colWidth}`;
+        altDiv.style.maxWidth = colWidth;
+        altDiv.style.minWidth = colWidth;
+        altDiv.style.wordWrap = "break-word";
+        altDiv.style.overflowWrap = "anywhere";
+      } else {
+        // above/below: cap the caption width, align to start
+        altDiv.style.maxWidth = colWidth;
+        altDiv.style.alignSelf = "flex-start";
+        altDiv.style.wordWrap = "break-word";
+        altDiv.style.overflowWrap = "anywhere";
+      }
     }
 
     // Order children based on placement
-    // above: [alt, img], below: [img, alt], left: [alt, img], right: [img, alt]
     const add = (a, b) => {
       if (a) container.appendChild(a);
       if (b) container.appendChild(b);
     };
-
     if (place === "above") add(altDiv, comic);
     else if (place === "left") add(altDiv, comic);
     else if (place === "right") add(comic, altDiv);
