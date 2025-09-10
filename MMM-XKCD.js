@@ -18,21 +18,26 @@ Module.register("MMM-XKCD", {
         randomComic: false,
         alwaysRandom: false,
         showTitle: true,
+
+        // NEW: alt text options
+        showAlt: true,            // render the xkcd "alt" text
+        altPlacement: "below",    // "below" to show as caption, "tooltip" to show on hover
+        altMaxLength: 0           // 0 = no truncation; set e.g. 180 to trim
     },
 
     // Define start sequence.
     start: function() {
         Log.info("Starting module: " + this.name);
-        
+
         this.dailyComic = "";
         this.dailyComicTitle = "";
+        this.dailyComicAlt = "";      // NEW
 
         this.numComic = null;
         this.comicYear = null;
         this.comicMonth = null;
 
         this.animationSpeed = 2000;
-        // this.scrollProgress = 0;
         this.loaded = false;
         this.sendSocketNotification("SET_CONFIG", this.config);
     },
@@ -47,6 +52,12 @@ Module.register("MMM-XKCD", {
         return ["moment.js"];
     },
 
+    // Helper to optionally truncate alt text
+    _maybeTruncate(str, max) {
+        if (!max || max <= 0 || !str) return str || "";
+        return str.length > max ? (str.slice(0, max - 1) + "…") : str;
+    },
+
     // Define header.
     getHeader: function() {
         if (this.config.showTitle && !this.dailyComicTitle == "") {
@@ -54,7 +65,7 @@ Module.register("MMM-XKCD", {
             title.className = 'title';
             title.innerText = this.config.header;
 
-            const text = document.createElement('div')
+            const text = document.createElement('div');
             text.className = 'text';
             text.innerText = this.dailyComicTitle;
 
@@ -63,13 +74,12 @@ Module.register("MMM-XKCD", {
             number.innerText = "(" + this.numComic + ")" + " | " + this.comicMonth.padStart(2, '0') + "." + this.comicYear;
 
             return `${title.innerHTML} - ${text.innerHTML} ${number.innerHTML}`;
-            // return `${title.outerHTML} ${text.outerHTML} ${number.outerHTML}`;
         } else {
             return this.config.header;
         }
     },
 
-    // Override dom geneartor.
+    // Override dom generator.
     getDom: function() {
         var wrapper = document.createElement("div");
         wrapper.id = "wrapper";
@@ -79,10 +89,18 @@ Module.register("MMM-XKCD", {
             wrapper.className = "light small dimmed";
             return wrapper;
         }
-        
+
         var comic = document.createElement("img");
-        comic.id = "comic"
+        comic.id = "comic";
         comic.src = this.dailyComic;
+
+        // Accessibility + tooltip (if configured)
+        if (this.dailyComicAlt) {
+            comic.alt = this.dailyComicAlt;
+            if (this.config.altPlacement === "tooltip") {
+                comic.title = this.dailyComicAlt;
+            }
+        }
 
         if (this.config.grayScale || this.config.invertColors) {
             comic.setAttribute("style", "-webkit-filter: " +
@@ -107,18 +125,24 @@ Module.register("MMM-XKCD", {
 
         wrapper.appendChild(comic);
 
+        // Visible caption under the image
+        if (this.config.showAlt && this.config.altPlacement !== "tooltip" && this.dailyComicAlt) {
+            const altDiv = document.createElement("div");
+            altDiv.className = "xkcd-alt light small dimmed";
+            altDiv.textContent = this._maybeTruncate(this.dailyComicAlt, this.config.altMaxLength);
+            wrapper.appendChild(altDiv);
+        }
+
         return wrapper;
     },
 
     // Override socket notification handler.
     socketNotificationReceived: function(notification, payload) {
-        // console.log(payload);
         if (notification === "COMIC") {
             this.loaded = true;
             this.dailyComic = payload.img;
-            // this.dailyComicTitle = payload.safe_title;
-            console.log(payload.title.length);
-            this.dailyComicTitle = payload.title.substring(0, 15);
+            this.dailyComicTitle = (payload.title || "").substring(0, 15); // keep your short title behavior
+            this.dailyComicAlt = payload.alt || "";                        // NEW: capture alt text
             this.numComic = payload.num;
             this.comicYear = payload.year;
             this.comicMonth = payload.month;
